@@ -96,3 +96,162 @@
 		const double max3 = 1.4*square(var);		// error: var는 상수가 아니다.
 		```
 	- constexpr이나 consteval로 선언한 함수는 C++ 버전의 순수 함수 개념이다. 부수 효과가 발생하지 않고 인수로 전달되는 정보만 이용할 수 있다.
+- 포인터, 배열, 참조
+	- char v[6]; // 문자 6개짜리 배열
+	- char* p; // 문자로의 포인터
+	- char* p = &v[3]; p는 v의 네 번째 원소를 가리킨다.
+	- char x = *p;
+	- 단항 접두사 *는 "~에 담긴 내용", 단항 접두사 &는 "~의 주소"를 뜻한다.
+	- 범위 기반 for문
+		```cpp
+		void print()
+		{
+			int v[] = {0, 1, 2, 3, 4, 5};
+
+			for (auto x : v)
+				cout << x << '\n';
+
+			for (auto x : {10, 21, 32, 43, 54})
+				cout << x << '\n'; 
+
+			for (auto& x : v)
+				++x;
+		}
+		```
+		- 첫 번째 for문은 "v의 각 원소를 처음 원소부터 마지막 원소까지 x에 하나씩 복사한 후 출력하라"라고 읽는다.
+		- 복사하지 않고 싶으면 3번째 for문처럼 사용한다.
+- 널 포인터
+	- 가리키는 객체가 없거나 "어떤 객체도 사용할 수 없다"는 개념을 나타내려면 포인터에 nullptr값을 할당한다. 모든 포인터 타입에 nullptr을 공통적으로 사용한다.
+	- 기존 코드에서는 전형적으로 0이나 NULL을 사용했다. 하지만 nullptr을 사용하면 정수와 포인터 간 잠재적 혼란이 발생하지 않는다.
+- 하드웨어와의 매핑
+	- 할당
+		```cpp
+		int x = 2;
+		int y = 3;
+		x = y;	// x는 3이 되므로 x == y다
+		```
+		***
+		```cpp
+		int x = 2;
+		int y = 3;
+		int *p = &x;
+		int *q = &y;	// p!=q이고 *p!=*q이다
+		p = q;		// p는 &y가 된다. 이제 p==q이므로 *p==*q이다
+		```
+		***
+		```cpp
+		int x = 2;
+		int y = 3;
+		int& r = x;	// r은 x를 참조
+		int& r2 = y;	// r2는 y를 참조
+		r = r2;		// r2를 통해 읽어 r을 통해 쓰면 x는 3이 된다.
+		```
+	- 초기화
+		- 초기화는 할당과 다르다. 초기화는 초기화하지 않은 메모리 조각을 유효한 객체로 만드는 작업이다. 거의 모든 타입에서 초기화하지 않은 변수를 읽거나 쓸 때 어떤 일이 일어날지 확실하지 않다. 참조를 생각해보자
+		```cpp
+		int x = 7;
+		int& r {x};	// r을 x에 바인딩한다(r은 x를 참조한다)
+		r = 7;		// r이 참조하는 객체에 할당한다
+
+		int& r2;	// 오류: 초기화하지 않은 참조
+		r2 = 99;	// r2가 참조하는 객체에 할당한다
+		```
+		다행히 초기화하지 않은 참조는 생성할 수 없다. 생성했다면 r2=99가 불특정 메모리 위치에 99를 할당해 잘못된 결과로 이어졌을 것이다.
+## 2장 사용자 정의 타입
+- 구조체
+- 클래스
+	- 클래스는 타입의 인터페이스(누구나 접근하는 부분)와 구현(그 밖에 접근 불가능한 데이터에 접근하는 부분)을 구분하도록 되어 있다.
+	- 클래스는 멤버들의 집합이며, 멤버는 데이터나 함수, 타입 멤버일 수 있다.
+	- 클래스의 인터페이스는 public 멤버로 정의되며, private 멤버는 인터페이스로만 접근할 수 있다.	
+	- 클래스 선언에서 public과 private의 순서는 중요하지 않으나 표현을 강조하고 싶을 때를 제외하고는 관례상 public을 먼저, private을 나중에 선언한다.
+	- struct와 class는 기본적으로 차이가 없다. struct는 기본값으로 public 멤버를 갖는 class일 뿐이다.
+- 열거
+	- enum class
+		```cpp
+		enum class Color {red, blue, green};
+		enum class Traffic_light {green, yellow, red};
+
+		Color col = Color::red;
+		Traffic_light light = Traffic_light::red;
+		```
+		- enum 뒤에 나오는 class는 열거가 강형(strongly-typed)임을 명시하고 열거자의 범위를 지정한다.
+		- enum class는 우연히 상수를 잘못 사용하는 일이 없도록 방지한다. 즉, Color과 Traffic_light이 섞이지 않는다.
+		```cpp
+		Color x1 = red;					// 오류: 어떤 red인가?
+		Color y2 = Traffic_light::red;	// 오류: 이 red는 Color가 아니다.
+		Color z3 = Color::red;			// OK
+		auto x4 = Color::red;			// OK
+		```
+		- 마찬가지로 Color와 정수 값도 암묵적으로 섞이지 않는다.
+		```cpp
+		int i = Color::red;		// 오류: Color::red는 int가 아니다.
+		Color c = 2;			// 초기화 오류: 2는 Color가 아니다.
+		```
+		- enum으로 변환하려는 시도를 잡아내 오류를 방지하면 좋겠지만 대개 enum의 내부 타입(기본값은 int) 값으로 enum을 초기화하려 하므로 허용되며, 내부 타입을 enum으로 명시적으로 변환할 때도 마찬가지이다.
+		```cpp
+		Color x = Color{5};			// OK
+		Color y {6};				// OK
+
+		int x = int(Color::red);	// OK
+		```
+		- Traffic_light라는 열거 이름을 반복해서 쓰기 귀찮으면 특정 범위 안에서 줄여 쓸 수 있다.
+		```cpp
+		Traffic_light& operator++(Traffic_light& t)
+		{
+			using enum Traffic_light; //여기서는 Traffic_light를 사용한다.
+
+			switch (t) {
+				case green: return t=yellow;
+				case yellow: return t=red;
+				case red: return t=green;
+			}
+		}
+		```
+		- 열거자 이름을 명시적으로 한정하고 싶지 않고 (명시적 변환이 필요 없도록) 열거자 값을 int로 두려면 enum class에서 class를 빼고 "일반적인" enum으로 만든다.
+		- "일반적인" enum은 C++ 초창기부터 지원한 기능이라 동작이 매끄럽지 않은데도 요즘 코드에 흔히 보인다.
+- 공용체(union)
+	- 공용체는 모든 멤버를 같은 주소에 할당한 struct로서 그 union에서 가장 큰 멤버의 크기만큼 공간을 차지한다.
+	- 다시 말해 union에는 1번에 딱 한 멤버의 값만 저장할 수 있다.
+	```cpp
+	enum class Type {ptr, num};
+
+	struct Entry{
+		string name;
+		Type t;
+		Node* p;	// t==Type::ptr이면 p를 사용한다
+		int i;		// t==Type::num이면 i를 사용한다
+	}
+
+	void f(Entry* pe)
+	{
+		if (pe->t == Type::num)
+		{
+			cout << pe->i;
+			// ...
+		}
+	}
+	```
+	- 멤버 p와 i를 동시에 저장할 일이 없으니 이렇게 하면 공간이 낭비된다. 아래처럼 union 멤버로 명시하면 문제가 쉽게 풀린다.
+	```cpp
+	union Value {
+		Node* p;
+		int i;
+	}
+	```
+	- Value::p와 Value::i는 같은 Value 객체의 메모리 주소에 저장된다.
+	- std::variant라는 표준 라이브러리 타입을 이용하면 공용체를 직접 사용하지 않아도 된다.
+	- variant는 여러 타입 집합 중 하나의 값을 저장한다. 예를 들어 variant<Node*, int>에 Node*나 int를 저장할 수 있다.
+	```cpp
+	struct Entry{
+		string name;
+		variant<Node*, int> v;
+	};
+
+	void f(Entry* pe)
+	{
+		if (holds_alternative<int>(pe->v))	// *pe가 int를 저장하는가?
+			cout << get<int>(pe->v);		// int를 가져온다
+		// ...
+	}
+	```
+	- 많은 경우 union보다 std::variant가 사용하는 편이 더 간단하고 안전하다.
