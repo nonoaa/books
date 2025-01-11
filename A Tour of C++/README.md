@@ -255,3 +255,138 @@
 	}
 	```
 	- 많은 경우 union보다 std::variant가 사용하는 편이 더 간단하고 안전하다.
+
+## 3장 모듈성
+- 분리 컴파일
+	- C++는 사용자 코드에 사용할 타입과 함수의 선언만 보여지는 분리 컴파일개념을 지원한다.
+		- 헤더 파일: 헤더파일이라는 별개의 파일에 선언을 넣은 후, 선언이 필요한 곳에서 헤더 파일명으로 헤더 파일을 #include한다.
+			- 헤더 파일과 #include는 모듈성을 시뮬레이션하는 아주 오래된 방법이며, 몇 가지 심각한 단점을 지닌다.
+				- 컴파일 시간: 101개의 번역 단위에서 header.h를 #include하면 컴파일러는 header.h의 텍스트를 101번 처리한다.
+				- 순서 종속성: header2.h보다 header1.h를 먼저 #include하면 header1.h에 들어있는 선언과 매크로가 header2.h 내 코드의 의미를 바꿀 수 있다. 
+				반대로 header1.h보다 header2.h를 먼저 #include하면 header2.h가 header1.h 내 코드에 영향을 미칠 수 있다.
+				- 비일관성: 타입이나 함수 같은 엔티티를 한 파일에 정의한 후 조금 다르게 또 다른 파일에 정의하면 고장이나 알아채기 어려운 오류로 이어질 수 있다. 
+				이러한 문제는 우연히 혹은 고의로 엔티티를 한 헤더가 아니라 두 소스 파일에 별도로 선언하거나 헤더 파일 간 순서 종속성을 통해 선언할 때 발생한다.
+				- 이행성: 헤더 파일 내 선언 표현에 필요한 모든 코드는 그 헤더 파일에 제시해야 한다. 이렇게 하지 않으면 헤더 파일이 다른 헤더를 #include해 코드가 거재해지고, 이로 인해 
+				의도했든 우연이었든 헤더 파일의 사용자는 이러한 세부 구현에 의존할 수밖에 없게 된다.
+		- 모듈: module 파일을 정의해 별도로 컴파일한 후, 필요한 곳에서 import한다. 명시적으로 export한 선언만이 그 module을 import한 코드에 보여진다.
+			- C++20부터 드디어 언어 단에서 모듈성을 직접적으로 표현하는 방법을 지원하기 시작했다.
+			```cpp
+			export module Vector;
+			
+			export class Vector {
+			public:
+				Vector(int s);
+				double& operator[](int i);
+			private:
+				double *elem;
+			};
+
+			Vector::Vector(int s):elem{new double[s]}
+			{
+			}
+
+			double& Vector::operator[](int i)
+			{
+				return elem[i];
+			}
+
+			export bool operator==(const Vector& v1, const Vector& v2)
+			{
+				if (...)
+					return false;
+				return true;
+			}
+			```
+			- 위 코드는 Vector라는 모듈을 정의한다. 위 module을 사용하려면 필요한곳에서 import하면 된다.
+			```cpp
+			import Vector;
+			#include <cmath>
+			```
+			- 헤더와 모듈의 차이점
+				- 모듈은 딱 한 번 컴파일된다.(그 모듈이 쓰이는 번역 단위마다 컴파일되지 않는다.)
+				- 두 모듈은 의미에 영향을 주지 않으면서 어떤 순서로든 임포트할 수 있다.
+				- 모듈로 import하거나 #include하면 모듈의 사용자는 암묵적으로 그 모듈에 접근할 수 없다.(또한 그 모듈에 신경 쓰지 않는다.) 즉, import는 이행적이 아니다.
+			- 모듈은 유지 보수성과 컴파일 타임 성능에 어마어마한 영향을 끼치기도 한다. 예를 들어 import std;을 사용해 "Hello, World!" 프로그램을 측정하면,
+			#include <iostream>을 사용한 버전보다 10배 더 빨리 컴파일된다. std 모듈이 <iostream> 헤더보다 정보가 10배 이상 많은 표준 라이브러리 전체를 포함하는데도 더 빠르다. 
+			헤더는 직접적으로 혹은 간접적으로 포함하는 것을 전부 컴파일러에게 전달하는 반면, 모듈은 인터페이스로만 익스포트하기 때문이다. 덕분에 너무나 많은 헤더 중에 무엇을 #include해야 
+			하는지 외우지 않고도 큰 모듈을 사용할 수 있다. 하지만 안타깝게도 module std는 C++20에 없다.. 부록 A에서 표준 라이브러리 구현에서 module std를 제공하지 않더라도 가져오는 방법을 설명하겠다.
+			- 모듈을 정의할 때는 선언과 정의를 별도의 파일로 분리하지 않아도 된다. 소스 코드 구성이 더 나아진다면 모를까 굳이 할 필요 없다. Vector 모듈을 간단히 정의해보겠다.
+				```cpp
+				export module Vector;
+
+				export class Vector{
+					//...
+				};
+
+				export bool operator==(const Vector& v1, const Vector& v2)
+				{
+					//...
+				}
+				```
+				- 이제 프로그램 조각을 그림으로 나타내 보겠다.
+					- user.cpp: [import Vector; 벡터를 사용한다] -> [Vector 모듈의 익스포트된 인터페이스] <- Vector.cpp: [export module Vector; Vector를 정의한다]
+					- 컴파일러는 export 지정자(specifier)로 명시한 모듈의 인터페이스와 세부 구현을 분리한다. 즉, Vector 인터페이스는 컴파일러가 생성하지만 사용자가 명시적으로 명명하지는 않는다. module을 사용하면 사용자에게 세부 구현을 숨기느라 코드가 복잡해지지 않는다. module은 export된 선언으로의 접근 권한만 부여한다.
+- 네임스페이스
+	- 함수, 클래스, 열거 외에 C++는 여러 선언을 한데 묶어 서로의 이름이 충돌하지 않도록 표현하는 메커니즘인 네임스페이스를 지원한다.
+	- 이름을 반복적으로 한정하면 장황하거나 산만해지므로 using 선언으로 그 이름을 어떤 범위 안으로 가져올 수 있다.
+	```cpp
+	using std::swap
+	swap(x,y);			// std::swap()
+	other::swap(x,y);	// 다른 swap()
+	```
+	- 표준 라이브러리 네임스페이스 내 이름에 접근하려면 using 디렉티브를 사용하자.
+	```cpp
+	using namespace std;
+	```
+	- using 디렉티브를 사용하면 그 티렉티브를 둔 범위 안에서는 한정자 없이 명명한 네임스페이스의 이름에 접근할 수 있다. 즉, std에 using 디렉티브를 사용하면 std::cout 대신 간단히 cout으로 작성해도 된다. 하지만 using 디렉티브를 사용하면 네임스페이스 내 이름을 선택적으로 사용할 수 없으므로 신중해야 한다.
+- 함수 인수와 반환값
+	- 반환 타입 추론
+		- 함수의 반환값으로부터 반환 타입을 추론할 수 있다.
+		```cpp
+		auto mul(int i, double d) { return i * d; }
+		```
+	- 후위 반환 타입
+		- 인수를 보고 결과 타입을 결정해야 할 때도 있다. 반환 타입을 명시하고 싶으면 인수 목록 뒤에 반환 타입을 추가하자. 그럼 auto는 "반환 타입을 나중에 언급하거나 추론하겠다"로 해석된다.
+		```cpp
+		auto mul(int i, double d) -> double {return i * d; } // 반환 타입은 "double" 이다.
+
+		auto next_elem() -> Elem*;
+		auto exit(int) -> void;
+		auto sqrt(doube) -> double;
+		```
+		- 이러한 표기로 이름을 더 깔끔하게 정렬할 수 있다.
+	- 구조적 바인딩
+		- 함수는 값 하나만 반환할 수 있으나 그 값이 멤버를 여러 개 포함하는 클래스 객체여도 상관 없다. 이러한 방법으로 많은 값을 간결하게 변환할 수 있다.
+		```cpp
+		struct Entry {
+			string name;
+			int value;
+		}
+
+		Entry read_entry(istream& is)
+		{
+			string s;
+			int i;
+			is >> s >> i;
+			return {s, i};
+		}
+		```
+		- 여기서 {s, i}는 Entry 반환값을 구성하는 데 쓰인다. 비슷하게 Entry의 멤버를 지역변수로 꺼낼 수 있다.
+		```cpp
+		auto [n,v] = read_entry(is);
+		cout << n << "," << v;
+		```
+		- auto [n,v]는 두 지역변수 n과 v를 선언하는데, 각각의 타입은 read_entry()의 반환 타입으로부터 추론한다. 클래스 객체의 멤버에 지역명을 부여하는 이러한 메커니즘을 구조적 바인딩이라 부른다.
+		- 언제나처럼 auto를 const와 &로 장식할 수 있다.
+		```cpp
+		map<string, int> m;
+		for (const auto [key, value] : m)
+			// ...
+		
+		void incr(map<string,int>& m)
+		{
+			for (auto& [key, value] : m)
+				++value;
+		}
+		```
+		- 프라이빗 데이터가 없는 클래스에 구조적 바인딩을 사용할 때 바인딩되는 방법은 아주 간단하다. 클래스 객체 내 데이터 멤버 수와 바인딩에 정의된 이름 수가 같으며, 바인딩에 넣은 각 이름이 해당하는 멤버를 명명한다. 명시적으로 복합 객체를 사용했을 때와 비교해 객체 코드 품질에 전혀 차이가 없다. 특히 구조적 바인딩을 사용한다고 해서 struct가 복사 되지는 않는다.
