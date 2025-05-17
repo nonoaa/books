@@ -240,7 +240,7 @@
 	```
 	- Value::p와 Value::i는 같은 Value 객체의 메모리 주소에 저장된다.
 	- std::variant라는 표준 라이브러리 타입을 이용하면 공용체를 직접 사용하지 않아도 된다.
-	- variant는 여러 타입 집합 중 하나의 값을 저장한다. 예를 들어 variant<Node*, int>에 Node*나 int를 저장할 수 있다.
+	- variant는 여러 타입 집합 중 하나의 값을 저장한다. 예를 들어 variant\<Node*, int>에 Node*나 int를 저장할 수 있다.
 	```cpp
 	struct Entry{
 		string name;
@@ -307,7 +307,7 @@
 				- 두 모듈은 의미에 영향을 주지 않으면서 어떤 순서로든 임포트할 수 있다.
 				- 모듈로 import하거나 #include하면 모듈의 사용자는 암묵적으로 그 모듈에 접근할 수 없다.(또한 그 모듈에 신경 쓰지 않는다.) 즉, import는 이행적이 아니다.
 			- 모듈은 유지 보수성과 컴파일 타임 성능에 어마어마한 영향을 끼치기도 한다. 예를 들어 import std;을 사용해 "Hello, World!" 프로그램을 측정하면,
-			#include <iostream>을 사용한 버전보다 10배 더 빨리 컴파일된다. std 모듈이 <iostream> 헤더보다 정보가 10배 이상 많은 표준 라이브러리 전체를 포함하는데도 더 빠르다. 
+			#include \<iostream>을 사용한 버전보다 10배 더 빨리 컴파일된다. std 모듈이 \<iostream> 헤더보다 정보가 10배 이상 많은 표준 라이브러리 전체를 포함하는데도 더 빠르다. 
 			헤더는 직접적으로 혹은 간접적으로 포함하는 것을 전부 컴파일러에게 전달하는 반면, 모듈은 인터페이스로만 익스포트하기 때문이다. 덕분에 너무나 많은 헤더 중에 무엇을 #include해야 
 			하는지 외우지 않고도 큰 모듈을 사용할 수 있다. 하지만 안타깝게도 module std는 C++20에 없다.. 부록 A에서 표준 라이브러리 구현에서 module std를 제공하지 않더라도 가져오는 방법을 설명하겠다.
 			- 모듈을 정의할 때는 선언과 정의를 별도의 파일로 분리하지 않아도 된다. 소스 코드 구성이 더 나아진다면 모를까 굳이 할 필요 없다. Vector 모듈을 간단히 정의해보겠다.
@@ -708,9 +708,88 @@ public:
 
 ### 전통적 연산
 - 비교: ==, !=, <, <=, >, >=, <=>
+	- 우주선 연산자 <=>
+		```cpp
+		bool b1 = (r1<=>r2) == 0;	// r1 == r2
+		bool b2 = (r1<=>r2) < 0;	// r1 < r2
+		bool b3 = (r1<=>r2) > 0;	// r1 > r2
+		```
+		- C의 strcmp() 처럼 <=>는 3자간 비교를 구현한다. 음수 반환값은 "~보다 적다", 0은 "같다", 양숫값은 "~보다 크다"는 뜻이다.
+		- <=>를 non-default로 정의하면 ==는 암묵적으로 정의되지 않지만 <와 나머지 관계 연산자는 정의된다!
+		```cpp
+		struct R2{
+			int m;
+			auto operator<=>(const R2& a) const { return a.m == m ? 0 : a.m < m ? -1 : 1; }
+		};
+
+		void user(R2 r1, R2 r2)
+		{
+			bool b4 = (r1 == r2);	// 오류: non-default인 ==가 없다
+			bool b5 = (r1<r2);		// OK
+		}
+		```
+		- 일반적이지 않은 타입에서는 다음과 같은 형태로 정의된다.
+		```cpp
+		auto operator<=>(const R3& a, const R3& b) { /*...*/ }
+		bool operator==(const R3& a, const R3& b) { /*...*/ }
+		```
+		- string과 vector 같은 대부분의 표준 라이브러리 타입은 위 형태를 따른다. 타입에 비교할 원소가 둘 이상일 때 기본 <=>는 한 번에 하나씩 사전순으로 검사하기 때문이다. 이럴 때는 <=>가 세 가지 가능성을 밝히기 위해 모든 원소를 검사해야 하므로 별도의 최적화된 ==를 추가로 제공하면 좋다.
+
 - 컨테이너 연산: size(), begin(), end()
 - 반복자와 "스마트 포인터": ->, *, [], ++, --, +, -, +=, -=
 - 함수 객체: ()
 - 입력과 출력 연산: >>, <<
 - swap()
 - 해시 함수: hash<>
+	- 표준 라이브러리 unordered_map\<K, V>는 K가 키 타입이고 V가 값 타입인 해시 테이블이다. 타입 X를 키로 사용하려면 hash\<X>를 정의해야 한다. sdt::string 같은 일반적인 타입은 표준 라이브러리에 이미 hash<>가 정의되어 있다.
+### 사용자 정의 리터럴
+- 내장 타입은 다음과 같은 리터럴을 지원한다.
+	- 123은 int다.
+	- 0xFF00u는 unsigned int다.
+	- 123.456은 double이다.
+	- "surprise!"는 const char[10]이다.
+- 사용자 정의 타입도 이러한 리터럴을 지원하면 유용하다. 다음과 같이 리터럴에 적절한 접미사를 붙여 그 의미를 정의하면 된다.
+	- "surprise!"s는 std::string이다.
+	- 123s는 second다.
+	- 12.7i은 12.7i+47이 complex수여야 하니 imaginary이다.
+- 표준 라이브러리 예제
+	- \<chrono> : std::literals::chrono_literals : h, min, s, ms, us, ns
+	- \<string> : std::literals::string_literals : s
+	- \<string_view> : std::literals::string_literals : sv
+	- \<complex> : std::literals::complex_literals : i, il, if
+- 사용자 정의 접미사가 붙은 리터럴을 사용자 정의 리터럴(User-Defined Literal) 또는 UDL이라 부른다. 이러한 리터럴은 리터럴 연산자(literal operator)를 사용해 정의된다. 리터럴 연산자는 인수 타입의 리터럴과 그 뒤에 오는 첨자를 반환 타입으로 변환한다. 예를 들어 imaginary의 접미사 i를 다음과 같이 구현한다.
+	```cpp
+	constexpr complex<double> operator""i(long double arg) { // imaginary 리터럴
+		return {0, arg};
+	}
+	```
+	- operator""는 리터럴 연산자를 정의하겠다는 뜻이다.
+	- 리터럴 지시자(literal indicator)인 ""뒤에 나오는 i는 연산자가 의미를 부여하는 접미사다.
+	- 인수 타입 long double은 접미사(i)를 부동소수점 리터럴에 정의하겠다는 뜻이다.
+	- 반환 타입 complex\<double>은 결과 리터럴의 타입을 명시한다.
+	- 이제 다음과 같이 작성할 수 있다.
+	```cpp
+	complex<double> z = 2.7182818+6.283185i;
+	```
+	- 접미사 i와 +의 구현은 둘 다 constexpr이므로 z의 값은 컴파일 타임에 계산된다.
+
+## 7장 템플릿
+- 제한된 템플릿 인수
+	- 대부분의 경우 템플릿은 일정 기준에 부합하는 템플릿 인수만 허용한다. 예를 들어 Vector는 일반적으로 복사 연산을 제공하므로 원소가 복사 가능해야 한다. 즉, Vector의 인수는 단순히 typename이 아니라 Element여야 하며, "Element"는 원소가 될 수 있는 타입의 요구 사항을 명시해준다.
+	```cpp
+	template<Element T>
+	class Vector{
+	private:
+		T* elem;	// elem은 타입 T의 원소 sz개로 된 배열을 가진다.
+		int sz;
+		// ...
+	}
+	```
+	- 앞에 붙인 template\<Element T> 는 수학에서 말하는 "Element(T)인 모든 T에 대해"를 C++로 표현한 것이다. 즉, Elment는 T가 Vector에서 요구하는 특성을 만족하는지 검사하는 프레디킷이다. 이러한 프레디킷을 콘셉트(concept)라 부른다. 콘셉트를 명시한 템플릿 인수를 제한된 인수(constrained argument)라 부르며 인수가 제한된 템플릿을 제한된 템플릿(constrained template)이라 부른다.
+	- 표준 라이브러리 원소의 타입 요구 사항은 약간 복잡하나 예제의 간단한 Vector에서 Element는 표준 라이브러리 콘셉트 copyable 정도일 것이다. 이 요구 사항에 부합하지 않는 타입의 템플릿을 사용하려 하면 컴파일 타임 오류가 발생한다. 예제로 보자
+	```cpp
+	Vector<int> v1;		// OK: int를 복사할 수 있다.
+	Vector<thread> v2;	// 오류: 표준 스레드를 복사할 수 없다.
+	```
+	- 즉, 콘셉트에 기반해 컴파일러가 사용 시점에 타입 검사를 수행하므로 제한되지 않은 템플릿 인수를 사용할 때보다 훨씬 일찍 유용한 오류 메시지를 제공할 수 있다. C++ 20 이전에는 공식적으로 콘셉트를 지원하지 않았으므로 예전 코드는 제한되지 않은 템플릿 인수를 사용하는 대신 요구 사항을 설명서로 남겼다.
+	- 콘셉트 검사는 전적으로 컴파일 타임 메커니즘이고 생성된 코드는 제한되지 않은 템플릿으로 만들어진 코드와 동일하다.
