@@ -793,3 +793,113 @@ public:
 	```
 	- 즉, 콘셉트에 기반해 컴파일러가 사용 시점에 타입 검사를 수행하므로 제한되지 않은 템플릿 인수를 사용할 때보다 훨씬 일찍 유용한 오류 메시지를 제공할 수 있다. C++ 20 이전에는 공식적으로 콘셉트를 지원하지 않았으므로 예전 코드는 제한되지 않은 템플릿 인수를 사용하는 대신 요구 사항을 설명서로 남겼다.
 	- 콘셉트 검사는 전적으로 컴파일 타임 메커니즘이고 생성된 코드는 제한되지 않은 템플릿으로 만들어진 코드와 동일하다.
+- 값 템플릿 인수
+	- 템플릿은 타입 인수 외에 값도 인수로 받는다.
+	```cpp
+	template<typename T, int N>
+	struct Buffer{
+		constexpr int size() { return N; }
+		T elem[N];
+		// ...
+	};
+	```
+- 템플릿 인수 추론
+	- 인수가 많으면 템플릿 인수 타입을 일일이 명시하기 번거롭다. 다행히도 많은 경우에 pair의 생성자가 초기자로부터 템플릿 인수를 추론할 수 있다.
+	```cpp
+	pair<int, double> p = {1, 5.2};
+	pair p = {1, 5.2};	// p는 pair<int, double>이다
+	```
+	- 하지만 추론도 혼란을 일으킬 수 있다.
+	```cpp
+	Vector<string> vs {"Hello", "World"};	// OK: Vector<string>
+	Vector vs1 {"Hello", "World"};			// OK: Vector<const char*>으로 추론(의외인가?)
+	Vector vs2 {"Hello"s, "World"s};		// OK: Vector<string>으로 추론
+	Vector vs3 {"Hello"s, "World"};			// 오류: 초기자 리스트가 통일되지 않았다
+	Vector<string> vs4 {"Hello"s, "World"};	// OK: 원소 타입을 명시했다
+	```
+### 매개변수화 연산
+- 템플릿의 용도는 단순히 원소타입으로 컨테이너를 매개변수화하는데 그치지 않는다. 표준 라이브러리의 타입 및 알고리듬을 매개변수화하는 데 광범위하게 쓰인다.
+- 다음 세 방법으로 타입이나 값으로 매개변수화한 연산을 표현한다.
+	- 함수 템플릿
+	- 함수 객체: 데이터를 운반하는 객체로서 함수처럼 호출한다.
+	- 람다식: 함수 객체의 축약형
+- finally
+	- 소멸자는 더 이상 사용하지 않는 객체를 해제하는 일반적이고 암묵적인 메커니즘을 제공하지만 단일 객체이거나 (C 프로그램과 공유된 타입이라) 소멸자가 없는 객체와 관련되지 않으면 어떻게 해제해야 할까?
+	- 범위가 종료될 때 필요한 동작을 실행하는 finally() 함수를 정의해 해결한다.
+	```cpp
+	void old_style(int n)
+	{
+		void* p = malloc(n*sizeof(int));	// C 방식
+		auto act = finally([&]{free(p);});	// 범위 종료 시 람다를 호출한다.
+	} // 범위 종료 시 p는 암묵적으로 해제된다
+	```
+- Attribute
+	- [[nodiscard]] : C++17
+		- 이 attribute가 붙은 함수나 attibute가 붙은 enum, class등을 리턴하는 함수를 만들었다면 해당 함수를 호출할때는 리턴값을 받아야 한다고 컴파일러에 알려주는 것이다. 이는 컴파일 시점에 워닝으로 알려준다.
+		- [[nodiscard("string")]] - C++ 20은 워닝 메시지에 "string" 부분도 같이 남겨준다.
+		```cpp
+		[[nodiscard]] int strategic_value(int x, int y)
+		{
+			return x^y;
+		}
+
+		int main()
+		{
+		strategic_value();			// warning
+		auto v = strategic_value();	// ok
+
+		return 0;
+		}
+		```
+	- [[deprecated]] / [[deprecated("string")]] - C++14
+		- 해당 attribute가 붙은 함수를 사용하면 사용은 가능하지만 앞으로 제거될 수 있음을 워닝으로 알려준다. 더 이상 사용되지 않을 함수에게 붙인다.
+		```cpp
+		[[deprecated]]
+		void TriassicPeriod() {
+			std::clog << "Triassic Period: [251.9 - 208.5] million years ago.\n";
+		}
+		
+		int main()
+		{
+			TriassicPeriod(); // warning
+			return 0;
+		}
+		```
+	- [[fallthrough]] - C++17
+		- switch / case 문에서 break문을 중간에 넣지 않았을 경우 컴파일러가 워닝을 발생시킬 수도 있다. 이것이 의도적인 상황일 경우 [[fallthrough]]를 사용하여 워닝을 제거할 수 있다.
+		```cpp
+		int main()
+		{
+			int A = 0;
+			
+			switch(A)
+			{
+			case 0:
+				A += 0;
+				[[fallthrough]];
+			case 1:
+				A += 1;
+				[[fallthrough]];
+			default:
+				A += 2;
+				break;
+			}
+
+			return 0;
+		}
+		```
+- 컴파일 타임 if
+	- 일반성과 성능 최적화가 매우 중요한 기초 코드에서 slow_and_safe라는 일반적 연산 함수와 simple_and_fast 함수를 제공할 수 있다.
+	```cpp
+	template<typename T>
+	void update(T& target)
+	{
+		// ...
+		if constexpr(is_trivially_copyable_v<T>)
+			simple_and_fast(target);	// "보통의 기존 데이터"에 쓰임
+		else
+			slow_and_safe(target);		// 좀 더 복잡한 타입에 쓰임
+		// ...
+	}
+	```
+	- is_trivially_copyable_v\<T>는 단순하게 타입을 복사할 수 있는지 알려주는 타입 프레디킷이다.
