@@ -903,3 +903,137 @@ public:
 	}
 	```
 	- is_trivially_copyable_v\<T>는 단순하게 타입을 복사할 수 있는지 알려주는 타입 프레디킷이다.
+
+## 8장 콘셉트와 제네릭 프로그래밍
+### 콘셉트
+- sum()을 예제로 보자
+	```cpp
+	template<typename Seq, typename Value>
+	Value sum(Seq& s, Value v)
+	{
+		for (const auto& x : s)
+			v+=x;
+		return v;
+	}
+	```
+- 위 sum()의 요구 사항은 다음과 같다.
+	- 첫 번째 템플릿 인수는 원소 시퀀스여야 하고,
+	- 두 번째 템플릿 인수는 수여야 한다.
+- 구체적으로 sum()은 다음의 인수 쌍으로 호출된다.
+	- 범위 기반 for문이 동작하도록 begin()과 end()를 지원하는 시퀀스 Seq
+	- 시퀀스 내 원소를 더할 수 있도록 +=를 지원하는 산술 타입 Value
+- 위와 같은 요구 사항을 콘셉트라고 부른다.
+- 위처럼 단순화시킨 시퀀스 요구 사항을 충족하는 타입 예가 표준 라이브러리의 vector, list, map이다. 산술 타입 요구사항을 충족하는 타입 예는 int, double, Matrix다.
+- sum() 알고리듬은 원소(시퀀스)를 저장할 데이터 구조의 타입과 원소의 타입이라는 두 가지 차원에서 제네릭이라 말할 수 있다.
+
+## 9장 라이브러리 훑어보기
+### 표준 라이브러리 구성
+- 표준 라이브러리의 모든 기능은 네임스페이스 std에 들어 있으며, 모듈이나 헤더 파일을 통해 사용자가 이용할 수 있다.
+- 네임스페이스
+	- 표준 라이브러리는 std에 몇 가지 하위 네임스페이스를 제공하며, 명시적 동작을 통해서만 접근할 수 있다.
+		- std::chrono: std::literals::Chrono_literals를 포함한 chrono의 모든 기능
+		- std::literals::chrono_literals: 연도에는 접미사 y, 날짜에는 d, 시간에는 h, 분에는 min, 밀리초에는 ms, 나노초에는 ns, 초에는 s, 마이크로초에는 us
+		- std::literals::complex_literals: double 허수에는 접미사 i, float 허수에는 if, long double 허수에는 il
+		- std::literals::string_literals: 문자열에는 접미사 s
+		- std::literals::string_view_literals: 문자열 뷰에는 접미사 sv
+		- 수학 상수에는 std::numbers
+		- 다형 메모리 자원에는 std::pmr
+	- 하위 네임스페이스의 접미사를 사용하려면 어떤 네임스페이스에 들어 있는지 알려야 한다.
+		```cpp
+		auto z1 = 2+3i;	// 오류: 'i'라는 접미사가 없음
+
+		using namespace literals::complex_literals;	// 복소수 리터럴임을 보였다
+		auto z2 = 2+3i;	// ok: z2는 complex<double>이다
+		```
+	- ranges 네임스페이스
+		- 표준 라이브러리는 sort()와 copy()같은 알고리즘을 두가지 버전으로 제공한다.
+			- 반복자 쌍을 받는 전통적인 시퀀스 버전. 예를 들어 sort(begin(v), v.end());
+			- 범위 하나를 받는 범위 버전. 예를 들어 sort(v);
+		- 이상적으로는 별다른 구분 없이 위 두 버전을 완전히 오버로딩할 수 있어야 하지만 그렇지 못하다.
+		```cpp
+		using namespace std;
+		using namespace ranges;
+
+		void f(vector<int>& v)
+		{
+			sort(v.begin(), v.end());	// 오류: 모호함
+			sort(v);					// 오류: 모호함
+		}
+		```
+		- 기존의 제한되지 않은 템플릿을 사용하는 경우 표준에서는 명시적으로 표준 라이브러리 알고리듬의 범위 버전을 스코프 안으로 명시적으로 넣게 한다.
+		```cpp
+		using namespace std;
+
+		void g(vector<int>& v)
+		{
+			sort(v.begin(), v.end());		// OK
+			sort(v);						// 오류: (std 안에) 일치하는 함수가 없음
+			ranges::sort(v);				// OK
+			using ranges::sort;				// 여기서부터는 sortv(v) OK
+			sort(v);						// OK
+		}
+		```
+	- 모듈
+		- 표준 라이브러리 모듈은 현재 존재하지 않는다. C++23에서 누락된 이 부분을 개선할 가능성이 높다. 우선은 namespace std의 모든 기능을 제공하면서 표준이 될 가능성이 높은 module std를 사용하겠다.
+
+## 10장 문자열과 정규식
+### 문자열
+- string 구현
+	- 근래에는 string을 대개 짧은 문자열 최적화(short-string optimization)로 구현한다. 즉 짧은 문자열 값은 string 객체 자체에 보관하고, 긴 문자열은 자유 저장소로 보낸다.
+	- "짧은" 문자열이란 구현에서 정의하기 나름이지만 "대략 14개" 정도이다.
+	- string의 실제 성능은 런타임 환경에 따라 크게 좌우된다. 특히 다중 스레드 구현에서는 메모리 할당 비용이 상대적으로 크다. 길이가 다른 문자열을 여러 개 사용할 경우 메모리 단편화가 발생하기도 한다. 그래서 대부분의 구현에 짧은 문자열 최적화를 사용한다.
+### 문자열 뷰
+- 문자 시퀀스는 일반적으로 어떤 함수에 전달돼 읽힌다. string을 값으로 전달하거나 문자열로의 참조로 전달하거나 C 스타일 문자열로 전달한다. 표준에서 제공하지 않는 문자열 타입 등의 다른 형태로 전달하는 시스템도 많다. 이를 해결하기 위해 표준 라이브러리는 string_view를 제공한다. string_view는 간단히 말해 문자 시퀀스를 나타내는 (포인터, 길이) 쌍이다.
+- 가리키는 문자들을 소유하지 않는다는 점에서 string_veiw는 포인터나 참조와 비슷하다.
+```cpp
+string cat(string_view sv1, string_view sv2)
+{
+	string res {sv1};	// sv1로 초기화한다.
+	return res += sv2;	// sv2를 이어 붙여서 반환한다.
+}
+```
+- 이제 cat()을 호출해보자
+```cpp
+string king = "Harold";
+auto s1 = cat(king, "William");				// HaroldWilliam: string과 const char*
+auto s2 = cat(king, king);					// HaroldHarold: string과 string
+auto s3 = cat("Edward", "Stephen"sv);		// EdwardStephen: const char*와 string_view
+auto s4 = cat("Canute"sv, king);			// CanuteHarold
+auto s5 = cat({&king[0],2}, "Henry"sv);		// HaHenry
+auto s6 = cat({&king[0],2}, {&king[2],4});	// Harold
+```
+- 위 cat()은 const String&를 인수로 받는 함수보다 세 가지 면에서 낫다.
+	- 여러 다양한 방법으로 처리되는 문자 시퀀스에 사용할 수 있다.
+	- 부분 문자열을 전달하기 쉽다.
+	- C 스타일 문자열 인수를 전달할 때 string을 생성하지 않아도 된다.
+- 위 코드에서 sv라는 접미사를 사용했다. 이렇게 하려면 선언부터 해야 한다.
+```cpp
+using namespace std::literals::string_view_literals;
+```
+- 왜 접미사를 붙일까? "Edward"를 전달할 때 const char*로부터 string_view를 생성해야 하는데 이때 문자수를 세어야 하기 때문이다. "Stephen"sv의 길이는 컴파일 타임에 계산된다.
+- string_view는 범위를 정의하므로 뷰 내 문자를 순회할 수 있다.
+```cpp
+void print_loswer(string_view sv1)
+{
+	for (char ch : sv1)
+		cout << toloswer(ch);
+}
+```
+- 다만 string_view에는 문자들의 읽기 전용 뷰라는 중대한 제약이 따른다. 예를 들어 인수를 소문자로 수정하는 함수에는 문자를 string_view로 전달할 수 없다. 대신 span을 사용하자. string_view는 일종의 포인터라서 사용하려면 무언가를 가리켜야 한다.
+```cpp
+string_view bad()
+{
+	string s = "Once upon a time";
+	return {&s[5], 4};	// 오류: 지역변수를 가리키는 포인터를 반환한다.
+}
+```
+
+### 정규식
+- 표준 라이브러리는 \<regex\>에서 다음과같이 정규식을 지원한다.
+	- regex_match(): 정규식을 문자열과 대조해본다.
+	- regex_search(): 데이터 스트림에서 정규식에 부합하는 문자열을 찾는다.
+	- regex_replace(): 데이터 스트림에서 정규식에 부합하는 문자열들을 찾아 치환한다.
+	- regex_iterator: 부합하는 부분과 부분 부합하는 부분을 순회한다.
+	- regex_token_iterator: 부합하지 않는 부분을 순회한다.
+- 검색
+	- 패턴을 사용하는 가장 간단한 방법은 스트림 검색이다.
