@@ -1104,3 +1104,84 @@ string_view bad()
 ### 출력 포맷팅
 - iostream과 format 라이브러리는 입력과 출력 포맷을 제어하는 연산을 제공한다. iostream 기능은 C++과 그 역사를 같이하며, 수 스트림 포맷팅을 주로 다룬다. format 기능은 최근에 추가됐고(C++20), 값을 조합하는 printf() 방식의 포맷팅 명세를 주로 다룬다.
 	- 스트림 포맷팅
+		- 조종자는 가장 간단한 포맷팅 제어 방법으로서 \<ios>, \<istream>, \<ostream>, \<iomanip>에서 지원한다. 예를 들어 정수를 10진수, 8진수, 16진수로 출력해보자.
+		```cpp
+		cout << 1234 << ' ' << hex << 1234 << ' ' << oct << 1234 << dec << 1234 << '\n'; // 1234 4d2 2322 1234
+		```
+		- 부동소수점 수의 출력 포맷도 명시적으로 설정할 수 있다.
+		```cpp
+		constexpr double d = 123.456;
+		cout << d << "; "				// d에 기본 포맷을 사용한다.
+		 << scientific << d << "; "		// d에 1.123e2 스타일 포맷을 사용한다.
+		 << hexfloat << d << "; "		// d에 16진법 표기를 사용한다.
+		 << fixed << d << "; "			// d에 123.456 스타일 포맷을 사용한다.
+		 << defaultfloat << d << "; "	// d에 기본 포맷을 사용한다.
+
+		// 123.456; 1.234560e+002; 0x1.edd2f2p+6; 123.456000; 123.456
+		```
+		- 정밀도는 부동소수점 수를 몇개의 숫자로 표시할지 가리키는 정수다.
+			- 일반 포맷(defaultfloat)은 구현에서 가용 공간 내에 값을 최대한 보존할 수 있는 포맷을 선택하게 한다. 정밀도는 최대 숫자 수를 나타낸다.
+			- 과학 포맷(scientific)은 소수점 앞에 숫자 하나와 지수로 값을 표현한다. 정밀도는 소수점 뒤 최대 숫자 수를 나타낸다.
+			- 고정 포맷(fixed)은 정수부 뒤에 소수점과 소수부로 값을 표현한다. 정밀도는 소수점 뒤 최대 숫자 수를 나타낸다.
+			- 부동소수점 값은 단순히 내리지 않고 반올림하며, precision()은 정수 출력에 영향을 주지 않는다.
+			```cpp
+			cout.precision(8);
+			cout << "precision(8): " << 1234.56789 << ' ' << 1234.56789 << ' ' << 123456 << '\n';
+			cout.precision(4);
+			cout << "precision(4): " << 1234.56789 << ' ' << 1234.56789 << ' ' << 123456 << '\n';
+			// 출력:
+			// precision(8): 1234.5679 1234.5679 123456
+			// precision(4): 1235 1235 123456
+			```
+	- printf() 스타일 포맷팅
+	```cpp
+	cout << format("{} {:x} {:o} {:d}\n", 1234, 1234, 1234, 1234);
+	// 10진수, 8진수, 16진수, 10진수
+	```
+### 스트림
+- 표준 스트림
+	- 일반적인 출력에 쓰이는 cout
+	- 버퍼가 없는 오류 출력에 쓰이는 cerr
+	- 버퍼가 있는 로깅 출력에 쓰이는 clog
+	- 표준 입력에 쓰이는 cin
+- 파일 스트림 \<fstream>
+	- 파일로부터 읽는 ifstream
+	- 파일에 쓰는 ofstream
+	- 파일을 읽고 쓰는 fstream
+- 문자열 스트림 \<sstream>
+	- string으로부터 읽는 istringstream
+	- string에 쓰는 ostringstream
+	- string을 읽고 쓰는 stringstream
+- 메모리 스트림
+	- C++ 초창기부터 사용자가 지정한 메모리 영역에 직접 읽고 쓸 수 있는 메모리 스트림을 지원했다. 그 중 가장 오래된 strstream은 수십 년 전 사라졌으나 이를 대체하는 spanstream, ispanstream, ospanstream이 C++23부터 공식화될 예정이다.
+	- ospanstream은 인수로 string 대신 span을 받는다는 점만 제외하면 ostringstream과 비슷하게 동작하고 비슷하게 초기화된다.
+	```cpp
+	void user(int arg)
+	{
+		array<char, 128> buf;
+		ospanstream ss(buf);
+		ss << "write" << arg << "to memory\n";
+		// ...
+	}
+	```
+	- 타깃 버퍼가 오버플로우되므로 문자열 상태가 failure로 할당된다.
+- 동기식 스트림
+	- 다중 스레드 시스템에서 다음 중 하나를 충족하지 않으면 I/O가 매우 불안정해지고 엉망이 된다.
+		- 오직 한 thread만 스트림을 사용한다.
+		- 한 번에 오직 한 thread만 접근 권한을 얻도록 스트림 접근을 동기화한다.
+
+## 12장 컨테이너
+- 컨테이너 훑어보기
+	- vector\<T>
+	- list\<T>
+	- forward_list\<T>
+	- deque\<T>
+	- map\<K,V>
+	- multimap\<K,V>			: 키가 여러 번 나올 수 있는 맵 (키 하나에 값을 여러 번 넣을 수 있음)
+	- unordered_map\<K,V>
+	- unordered_multimap\<K,V>
+	- set\<T>
+	- multiset\<T>				: 값이 여러 번 나올 수 있는 셋
+	- unordered_set\<T>
+	- unordered_multiset\<T>
+- 되도록이면 원소 시퀀스의 기본 타입으로 표준 라이브러리 vector를 사용하고, 이유가 있을 때만 다른 타입을 고려하자.
