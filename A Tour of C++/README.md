@@ -1185,3 +1185,66 @@ string_view bad()
 	- unordered_set\<T>
 	- unordered_multiset\<T>
 - 되도록이면 원소 시퀀스의 기본 타입으로 표준 라이브러리 vector를 사용하고, 이유가 있을 때만 다른 타입을 고려하자.
+
+## 13장 알고리듬
+- 반복자
+	- 다양한 종류의 반복자를 forward_iterator, random_access_iterator 같은 표준 라이브러리 concept로 사용할 수 있다.
+	- 예를 들어 list\<Entry\>::iterator는 list\<Entry\>의 일반적인 반복자 타입이다.
+	- 표준 라이브러리는 X의 반복자만 정의돼 있으면 동작하는 iterator_t\<X\>도 제공하니 반복자가 멤버 타입이 아닐 때 사용하자.
+- 스트림 반복자
+	- istream_iterator, ostream_iterator도 있다.
+	- 이를 직접 사용하는 경우는 드물고 대개 알고리듬의 인수로 제공한다.
+- 알고리듬 개요
+	- 표준 라이브러리는 아주 많은 알고리듬을 제공한다. 이러한 표준 라이브러리 알고리듬은 모두 입력으로 시퀀스를 받는다. b부터 e까지의 반개 시퀀스를 [b:e)라 표기한다.
+	- 선별된 표준 알고리듬 \<algorithm>
+		- f=for_each(b,e,f)			: [b:e) 내 각 원소 x에 대해 f(x)를 수행한다.
+		- p=find(b,e,x)				: p는 *p==x를 만족하는 [b:e) 내 첫 번째 p이다.
+		- p=find_if(b,e,f)		: p는 f(*p)를 만족하는 [b:e) 내 첫 번째 p이다.
+		- n=count(b,e,x)			: n은 *q==x를 만족하는 [b:e) 내 *q의 원소 수이다.
+		- n=count_if(b,e,f)			: n은 f(*q)를 만족하는 [b:e) 내 *q의 원소 수이다.
+		- replace(b,e,v,v2)			: *q==v를 만족하는 [b:e) 내 *q 원소들을 v2로 치환한다.
+		- replace_if(b,e,f,v2)		: f(*q)를 만족하는 [b:e) 내 *q 원소들을 v2로 치환한다.
+		- p=copy(b,e,out)			: [b:e)를 [out:p)로 복사한다.
+		- p=copy_if(b,e,out,f)		: f(*q)를 만족하는 [b:e) 내 *q 원소들을 [b:e)로 복사한다.
+		- p=move(b,e,out)			: [b:e)를 [out:p)로 이동시킨다.
+		- p=unique_copy				: [b:e)를 [out:p)로 복사하되 인접한 중복은 복사하지 않는다.
+		- sort(b,e)					: \<를 정렬 기준으로 사용해 [b:e)의 원소들을 정렬한다.
+		- sort(b,f)					: f를 정렬 기준으로 사용해 [b:e)의 원소들을 정렬한다.
+		- (p1,p2)=equal_range(b,e,v): [p1:p2)는 값 v로 된 정렬된 시퀀스 [b:e)의 부분 시퀀스이다. 기본적으로 v를 찾는 이진 검색이다.
+		- p=merge(b,e,b2,e2,out)	: 정렬된 두 시퀀스 [b:e)와 [b2:e2)를 [out:p)로 병합한다.
+		- p=merge(b,e,b2,e2,out,f)	: f로 비교해 정렬된 두 시퀀스 [b:e)와 [b2:e2)를 [out:p)로 병합한다.
+	- 연산을 인수로 전달할 때에는 흔히 람다를 사용한다.
+		```cpp
+		vector<int> v = {0,1,2,3,4,5};
+		for_each(v,[](int& x){x=x*x;});								// v=={0,1,4,9,16,25}
+		for_each(v.begin(),v.begin()+3,[](int& x){ x=sqrt(x); });	// v=={0,1,2,9,16,25}
+		```
+- 병렬 알고리듬
+	- 병렬 실행: 다수의 스레드에서 작업을 수행한다.
+	- 벡터화 실행: 벡터화를 이용해 하나의 스레드에서 작업을 수행한다. SIMD(Single Instruction, Multiple Data)라고도 부른다.
+	- \<execution\>에 들어 있는 알고리듬이다.
+		- seq: 순차 실행
+		- par: 병렬 실행(가능하다면)
+		- unseq: 비순차(벡터화) 실행(가능하다면)
+		- par_unseq: 병렬과/이나 비순차(벡터화) 실행(가능하다면)
+	- std::sort()를 생각해보자.
+		```cpp
+		sort(v.begin(),v.end());			// 순차
+		sort(seq,v.begin(),v.end());		// 순차(기본과 같다)
+		sort(par,v.begin(),v.end());		// 병렬
+		sort(par_unseq,v.begin(),v.end());	// 병렬과/이나 벡터화
+		```
+		- 알고리듬, 시퀀스 내 원소 수, 하드웨어, 그 하드웨어에 실해오디는 프로그램의 하드웨어 가동률에 따라 병렬화하고(하거나) 벡터화할 가치가 있는지가 결정된다.
+		- 결국 실행 정책 지표(execution policy indicator)는 힌트일 뿐이다. 컴파일러와/나 런타임 스케줄러가 동시 실행을 얼마나 사용할지 결정한다.
+		- 전부 명확하지 않으므로 정확한 측정 없이 효율성을 판단하지 않는 규칙이 무엇보다 중요하다.
+		- 안타깝게도 병렬 알고리듬의 범위 버전은 아직 표준에서 지원하지 않으나 필요하다면 아래처럼 쉽게 정의할 수 있다.
+			```cpp
+			void sort(auto pol, random_access_range auto& r)
+			{
+				sort(pol, r.begin(), r.end());
+			}
+			```
+		- equal_range를 제외하고 대부분의 표준 라이브러리 알고리듬은 sort()와 마찬가지로 par와 par_unseq로 병렬화하고 벡터화하라고 요청할 수 있다.
+		- 그렇다면 equal_range()는 왜 안 될까? 아직 누구도 쓸만한 병렬 알고리듬을 고안하지 못했기 때문이다.
+		- 많은 병렬 알고리듬이 주로 수 데이터에 쓰인다.
+		- 병렬 실행을 요청할 때는 데이터 경합과 데드락이 발생하지 않도록 해야 한다.
