@@ -1248,3 +1248,81 @@ string_view bad()
 		- 그렇다면 equal_range()는 왜 안 될까? 아직 누구도 쓸만한 병렬 알고리듬을 고안하지 못했기 때문이다.
 		- 많은 병렬 알고리듬이 주로 수 데이터에 쓰인다.
 		- 병렬 실행을 요청할 때는 데이터 경합과 데드락이 발생하지 않도록 해야 한다.
+
+## 14장 범위
+### 뷰
+- 뷰는 범위를 보는 방법이다.
+```cpp
+void user(forward_range auto& r)
+{
+	filter_view v{r, [](int x) { return x%2; } };	// r에서 홀수(만)를 본다
+	cout << "odd numbers: ";
+	for (int x : v)
+		cout << x << ' ';
+}
+```
+- filter_view를 읽으면 그 범위를 읽는다. 읽은 값이 프레디킷에 부합하면 반환하고 그렇지 않으면 filter_view는 범위 내 다음 원소를 읽고 검사한다.
+- 많은 범위가 무한이다. 또한 값 몇 개만 필요할 때가 많다. 그래서 범위에서 값 몇 개만 가져오는 뷰가 존재한다.
+```cpp
+void user(forward_range auto& r)
+{
+	filter_view v{r, [](int x) { return x%2; } };	// r에서 홀수(만)를 본다
+	take_view tv {v, 100};							// v에서 최대 100개 원소를 본다
+
+	cout << "odd numbers: ";
+	for (int x : tv)
+		cout << x << ' ';
+}
+```
+- take_view를 직접 사용하면 따로 명명하지 않아도 된다.
+```cpp
+for (int x : take_view{v,3})
+	cout << x << ' ';
+```
+- filter_view도 마찬가지다.
+```cpp
+for (int x : take_view{ filter_view { r, [](int x) { return x % 2; } }, 3})
+	cout << x << ' ';
+```
+- 이처럼 뷰가 몇 개만 중첩돼도 이해하기 어려워지므로 다른 대안으로 파이프라인을 사용한다.
+- 표준 라이브러리는 범위 어댑터(range adaptor)라 부르는 많은 뷰를 제공한다.
+	- 표준 라이브러리 뷰(범위 어댑터) \<ranges\> (v는 뷰, r은 범위, p는 프레디킷, n은 정수)
+		- v = all_view{r}				: v는 r의 모든 원소이다.
+		- v = filter_view{r, p}			: v는 p를 만족하는 r의 원소이다.
+		- v = transform_view{r, f}		: v는 r의 각 원소에 f를 호출한 결과이다.
+		- v = take_view{r, n}			: v는 r의 최대 n개 원소이다.
+		- v = take_while_view{r, p}		: v는 p를 만족하지 않는 원소가 나타날 때까지 r의 원소이다.
+		- v = drop_view{r, n}			: v는 n+1번째 원소로 시작하는 r의 원소이다.
+		- v = drop_while_view{r, p}		: v는 p를 만족하지 않는 첫 번째 원소로 시작하는 r의 원소이다.
+		- v = join_view{r}				: v는 r을 1차원 배열로 변환한 버전이고, r의 원소들은 범위여야 한다.
+		- v = split_view(r, d)			: v는 구분자 d로 구분된 r의 부분 범위의 범위이고, d는 원소나 범위여야 한다.
+		- v = common_view(r)			: v는 (begin:end) 쌍으로 묘사된 r이다.
+		- v = reverse_view{r}			: v는 r을 거꾸로 한 원소들이고, r은 양방향 접근이 가능해야 한다.
+		- v = views::elements\<n\>(r)	: v는 r의 tuple 원소들의 n번째 원소들의 범위이다.
+		- v = keys_view{r}				: v는 r의 pair 원소들의 첫 번째 원소들의 범위이다.
+		- v = values_view{r}			: v는 r의 pair 원소들의 두 번째 원소들의 범위이다.
+		- v = ref_view{r}				: v는 r의 원소들을 참조하는 원소들의 범위이다.
+- 뷰는 원소를 소유하지 않는다. 뷰는 바라보고 있는 범위의 원소를 삭제할 책임이 없으며, 이는 범위의 책임이다. 뷰는 그 범위보다 오래 지속되면 안 된다.
+```cpp
+auto bad()
+{
+	vector v = {1, 2, 3, 4};
+	return filter_view{v, odd};	// v는 뷰 전에 소멸된다. 이러면 안된다!
+}
+```
+- 뷰는 복사 비용이 작아 값으로 전달한다.
+### 생성자
+- 범위는 대개 필요에 따라 그때그때 생성해야 한다. 이를 위해 표준 라이브러리는 몇 가지 간단한 생성자를 제공한다.
+- 범위 팩토리 \<ranges\> (v는 뷰, x는 원소 타입 T의 원소, is는 istream)
+	- v = empty_view\<T\>{}		: v는 타입 T 원소들의(원소가 있다면) 빈 범위
+	- v = single_view{x}		: v는 한 원소 x의 범위
+	- v = iota_view{x}			: v는 x 부터 시작하는 원소 무한개의 범위. ++로 증가한다. (create an iota_view with an unbounded range, starting at v.)
+	- v = iota_view{x, y}		: v는 원소 n개의 범위: x, x+1, ... y-1. ++로 증가한다.
+	- v = istream_view\<T\>{is}	: v는 is의 T에 >>를 호출해 얻는 범위
+```cpp
+for (int x : iota_view(42, 50))	// 42 43 44 45 46 47 48 49
+	cout << x << ' ';
+```
+
+### 파이프라인
+
